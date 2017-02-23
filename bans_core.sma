@@ -1,20 +1,15 @@
 #include <amxmodx>
 #include <amxmisc>
 #include <sqlx>
-
-#define DB_BAN         "amx_bans"
-#define DB_ADMIN       "amx_admins"
-#define DB_SERVER      "amx_servers"
-#define DEFAULT_TAG    "[BANS]"
-#define DEFAULT_FIELD  "_pw"
-#define DEFAULT_ACCESS "z"
+#include <bans>
 
 new g_iServerId;
 new g_pServerId;
+new g_szPassword[33][32];
 new Handle:g_pSqlTuple;
 
 public plugin_init() {
-  register_plugin("Simple AMX Bans", "1.0.0", "GuskiS");
+  register_plugin("Simple AMX Bans", BANS_VERSION, BANS_AUTHOR);
 
   register_dictionary("admin.txt");
   register_dictionary("common.txt");
@@ -90,12 +85,12 @@ public client_infochanged(id) {
     return PLUGIN_CONTINUE;
   }
 
-  // TODO check password change
-  new newname[32], oldname[32];
+  new newname[32], oldname[32], password[32];
   get_user_name(id, oldname, charsmax(oldname));
   get_user_info(id, "name", newname, charsmax(newname));
+  get_user_info(id, DEFAULT_FIELD, password, charsmax(password));
 
-  if(!equali(newname, oldname)) {
+  if(!equali(newname, oldname) || !equali(password, g_szPassword[id])) {
     set_user_access(id, newname);
   }
 
@@ -172,12 +167,22 @@ public MySQL_RecieveAdmins(failstate, Handle:query, error[], code, data[], datas
   else {
     server_print("%s %L", DEFAULT_TAG, LANG_SERVER, "LOADED_ADMINS", count);
   }
-  // TODO add access to current users
+
+  users_access();
   SQL_FreeHandle(query);
   return PLUGIN_HANDLED;
 }
 
 // Helpers
+stock users_access() {
+  new num;
+  static players[32];
+  get_players(players, num);
+  for(--num; num >= 0; num--) {
+    set_user_access(players[num]);
+  }
+}
+
 stock lookup_access(id, username[], password[]) {
   new index = -1, result = 0;
   new i, adminname[32], adminpassword[32], count = admins_num();
@@ -227,10 +232,10 @@ stock lookup_access(id, username[], password[]) {
 }
 
 stock set_user_access(id, name[] = "") {
-  new password[32], username[32];
+  new username[32];
 
   remove_user_flags(id);
-  get_user_info(id, DEFAULT_FIELD, password, charsmax(password));
+  get_user_info(id, DEFAULT_FIELD, g_szPassword[id], charsmax(g_szPassword[]));
   if(name[0]) {
     copy(username, charsmax(username), name);
   }
@@ -238,7 +243,7 @@ stock set_user_access(id, name[] = "") {
     get_user_name(id, username, charsmax(username));
   }
 
-  new result = lookup_access(id, username, password);
+  new result = lookup_access(id, username, g_szPassword[id]);
   if(result & 1) {
     client_cmd(id, "echo ^"* %L^"", id, "INV_PAS");
   }
