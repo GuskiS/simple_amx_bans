@@ -9,7 +9,7 @@ new g_szPassword[33][32];
 new Handle:g_pSqlTuple;
 
 public plugin_init() {
-  register_plugin("Simple AMX Bans", BANS_VERSION, BANS_AUTHOR);
+  register_plugin("[BANS] - Core", BANS_VERSION, BANS_AUTHOR);
 
   register_dictionary("admin.txt");
   register_dictionary("common.txt");
@@ -102,7 +102,7 @@ public cmd_reloadadmins(id, level, cid) {
     return PLUGIN_HANDLED;
   }
 
-  remove_user_flags(0, read_flags("z"))
+  remove_user_flags(0, read_flags("z"));
   MySQL_LoadAdmins();
   return PLUGIN_HANDLED;
 }
@@ -118,15 +118,9 @@ public MySQL_Init() {
 }
 
 public MySQL_LoadAdmins() {
-  admins_flush();
-
-  new error[128];
-  new code, Handle:connection = SQL_Connect(g_pSqlTuple, code, error, charsmax(error));
-  if(connection == Empty_Handle) {
-    set_fail_state(error);
-  }
-
   new query[192];
+
+  admins_flush();
   formatex(query, charsmax(query), "SELECT `aa`.* FROM `%s` as aa WHERE `aa`.`deleted_at` IS NULL AND (`aa`.`expires_at` > UNIX_TIMESTAMP(NOW())) AND `aa`.`server_id` = %d", DB_ADMIN, g_iServerId);
   SQL_ThreadQuery(g_pSqlTuple, "MySQL_RecieveAdmins", query);
 }
@@ -138,6 +132,21 @@ public MySQL_RecieveAdmins(failstate, Handle:query, error[], code, data[], datas
   else if(failstate == TQUERY_QUERY_FAILED) {
     log_amx("%s Load query failed. [%d] %s", DEFAULT_TAG, code, error);
   }
+
+  // Amx::Admin(
+  //   id: integer,
+  //   user_id: integer,
+  //   server_id: integer,
+  //   username: string,
+  //   password: string,
+  //   expires_at: datetime,
+  //   access: string,
+  //   flags: string,
+  //   active: boolean,
+  //   deleted_at: datetime,
+  //   created_at: datetime,
+  //   updated_at: datetime
+  // )
 
   new count = 0;
   if(SQL_NumRows(query)) {
