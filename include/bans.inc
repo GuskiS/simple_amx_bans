@@ -93,6 +93,10 @@ stock _kick_player(id) {
   server_cmd("kick #%d %L", get_user_userid(id), id, "KICK_MESSAGE");
 }
 
+stock load_server_admin_query(output[], len, server) {
+  formatex(output, len, "SELECT `aa`.* FROM `%s` as aa WHERE `aa`.`deleted_at` IS NULL AND (`aa`.`expires_at` > UNIX_TIMESTAMP(NOW())) AND `aa`.`server_id` = %d AND `aa`.`main` = true", DB_ADMIN, server);
+}
+
 stock load_admins_query(output[], len, server) {
   formatex(output, len, "SELECT `aa`.* FROM `%s` as aa WHERE `aa`.`deleted_at` IS NULL AND (`aa`.`expires_at` > UNIX_TIMESTAMP(NOW())) AND `aa`.`server_id` = %d", DB_ADMIN, server);
 }

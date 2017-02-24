@@ -78,7 +78,7 @@ public cmd_ban(id, level, cid) {
     load_admin_query(query, charsmax(query), name, g_iServerId);
   }
   else {
-    // TODO load server admin
+    load_server_admin_query(query, charsmax(query), g_iServerId);
   }
 
   new data[2];
