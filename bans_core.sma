@@ -78,7 +78,10 @@ public plugin_cfg_post() {
 }
 
 public client_authorized(id) {
-  return set_user_access(id);
+  set_user_access(id);
+  if(is_user_admin(id)) {
+    MySQL_LoadAdmin(id);
+  }
 }
 
 public client_infochanged(id) {
@@ -130,7 +133,7 @@ public MySQL_RecieveAdmins(failstate, Handle:query, error[], code, data[], datas
   if(failstate) return mysql_errors_print(failstate, code, error);
 
   new count = 0;
-  if(SQL_NumRows(query)) {
+  if(SQL_NumResults(query)) {
     new col_flags    = SQL_FieldNameToNum(query, "flags");
     new col_access   = SQL_FieldNameToNum(query, "access");
     new col_username = SQL_FieldNameToNum(query, "username");
@@ -163,6 +166,43 @@ public MySQL_RecieveAdmins(failstate, Handle:query, error[], code, data[], datas
   return PLUGIN_HANDLED;
 }
 
+public MySQL_LoadAdmin(id) {
+  new query[192];
+
+  new name[LENGTH_NAME_SAFE], data[1];
+  data[0] = id;
+  mysql_get_username_safe(id, name, charsmax(name));
+  load_admin_query(query, charsmax(query), name, g_iServerId);
+  SQL_ThreadQuery(g_pSqlTuple, "MySQL_RecieveAdmin", query, data, sizeof(data));
+}
+
+public MySQL_RecieveAdmin(failstate, Handle:query, error[], code, data[], datasize) {
+  if(failstate) return mysql_errors_print(failstate, code, error);
+
+  new id = data[0];
+  if(!SQL_NumResults(query)) {
+    remove_user_flags(id);
+    return PLUGIN_HANDLED;
+  }
+
+  new col_flags    = SQL_FieldNameToNum(query, "flags");
+  new col_access   = SQL_FieldNameToNum(query, "access");
+  new col_username = SQL_FieldNameToNum(query, "username");
+  new col_password = SQL_FieldNameToNum(query, "password");
+
+  new access[32], flags[5], username[LENGTH_NAME], password[LENGTH_NAME];
+
+  SQL_ReadResult(query, col_access, access, charsmax(access));
+  SQL_ReadResult(query, col_flags, flags, charsmax(flags));
+  SQL_ReadResult(query, col_username, username, charsmax(username));
+  SQL_ReadResult(query, col_password, password, charsmax(password));
+
+  admins_push(username, password, read_flags(access), read_flags(flags));
+  set_user_access(id);
+
+  return PLUGIN_CONTINUE;
+}
+
 // Helpers
 stock users_access() {
   new num;
@@ -175,9 +215,9 @@ stock users_access() {
 
 stock lookup_access(id, username[], password[]) {
   new index = -1, result = 0;
-  new i, adminname[LENGTH_NAME], adminpassword[LENGTH_NAME], count = admins_num();
+  new i, adminname[LENGTH_NAME], adminpassword[LENGTH_NAME], count = admins_num()-1;
 
-  for(i = 0; i < count; i++) {
+  for(i = count; i >= 0; i--) {
     admins_lookup(i, AdminProp_Auth, adminname, charsmax(adminname));
     if(equali(username, adminname)) {
       index = i;
