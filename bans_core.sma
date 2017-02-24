@@ -5,13 +5,14 @@
 
 new g_iServerId;
 new g_pServerId;
-new g_szPassword[33][32];
+new g_szPassword[33][LENGTH_NAME];
 new Handle:g_pSqlTuple;
 
 public plugin_init() {
   register_plugin("[BANS] - Core", BANS_VERSION, BANS_AUTHOR);
 
   register_dictionary("admin.txt");
+  register_dictionary("amxbans.txt");
   register_dictionary("common.txt");
 
   register_cvar("amx_vote_ratio",     "0.02");
@@ -85,7 +86,7 @@ public client_infochanged(id) {
     return PLUGIN_CONTINUE;
   }
 
-  new newname[32], oldname[32], password[32];
+  new newname[LENGTH_NAME], oldname[LENGTH_NAME], password[LENGTH_NAME];
   get_user_name(id, oldname, charsmax(oldname));
   get_user_info(id, "name", newname, charsmax(newname));
   get_user_info(id, DEFAULT_FIELD, password, charsmax(password));
@@ -133,21 +134,6 @@ public MySQL_RecieveAdmins(failstate, Handle:query, error[], code, data[], datas
     log_amx("%s Load query failed. [%d] %s", DEFAULT_TAG, code, error);
   }
 
-  // Amx::Admin(
-  //   id: integer,
-  //   user_id: integer,
-  //   server_id: integer,
-  //   username: string,
-  //   password: string,
-  //   expires_at: datetime,
-  //   access: string,
-  //   flags: string,
-  //   active: boolean,
-  //   deleted_at: datetime,
-  //   created_at: datetime,
-  //   updated_at: datetime
-  // )
-
   new count = 0;
   if(SQL_NumRows(query)) {
     new col_flags    = SQL_FieldNameToNum(query, "flags");
@@ -155,7 +141,7 @@ public MySQL_RecieveAdmins(failstate, Handle:query, error[], code, data[], datas
     new col_username = SQL_FieldNameToNum(query, "username");
     new col_password = SQL_FieldNameToNum(query, "password");
 
-    new access[32], flags[5], username[32], password[32];
+    new access[32], flags[5], username[LENGTH_NAME], password[LENGTH_NAME];
 
     while(SQL_MoreResults(query)) {
       SQL_ReadResult(query, col_access, access, charsmax(access));
@@ -194,7 +180,7 @@ stock users_access() {
 
 stock lookup_access(id, username[], password[]) {
   new index = -1, result = 0;
-  new i, adminname[32], adminpassword[32], count = admins_num();
+  new i, adminname[LENGTH_NAME], adminpassword[LENGTH_NAME], count = admins_num();
 
   for(i = 0; i < count; i++) {
     admins_lookup(i, AdminProp_Auth, adminname, charsmax(adminname));
@@ -205,7 +191,7 @@ stock lookup_access(id, username[], password[]) {
   }
 
   if(index != -1) {
-    new access = admins_lookup(index, AdminProp_Access), ip[32], steamid[32];
+    new access = admins_lookup(index, AdminProp_Access), ip[LENGTH_IP], steamid[LENGTH_ID];
     admins_lookup(index, AdminProp_Password, adminpassword, charsmax(adminpassword));
     get_user_ip(id, ip, charsmax(ip), 1);
     get_user_authid(id, steamid, charsmax(steamid));
@@ -241,7 +227,7 @@ stock lookup_access(id, username[], password[]) {
 }
 
 stock set_user_access(id, name[] = "") {
-  new username[32];
+  new username[LENGTH_NAME];
 
   remove_user_flags(id);
   get_user_info(id, DEFAULT_FIELD, g_szPassword[id], charsmax(g_szPassword[]));

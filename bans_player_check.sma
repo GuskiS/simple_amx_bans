@@ -9,8 +9,6 @@ new Handle:g_pSqlTuple;
 public plugin_init() {
   register_plugin("[BANS] - Player Check", BANS_VERSION, BANS_AUTHOR);
 
-  register_dictionary("amxbans.txt");
-  register_dictionary("common.txt");
   register_dictionary("time.txt");
 }
 
@@ -43,7 +41,7 @@ public MySQL_Init() {
 }
 
 public MySQL_LoadBans(id) {
-  static steam[32], ip[20];
+  static steam[LENGTH_ID], ip[LENGTH_IP];
   get_user_authid(id, steam, charsmax(steam));
   get_user_ip(id, ip, charsmax(ip), 1);
 
@@ -67,20 +65,6 @@ public MySQL_RecieveBans(failstate, Handle:query, error[], code, data[], datasiz
     return PLUGIN_HANDLED;
   }
 
-  // Amx::Ban(
-  //   id: integer,
-  //   admin_id: integer,
-  //   server_id: integer,
-  //   username: string,
-  //   steam_id: string,
-  //   ip_address: string,
-  //   reason: string,
-  //   length: integer,
-  //   deleted_at: datetime,
-  //   created_at: datetime,
-  //   updated_at: datetime
-  // )
-
   new col_admin      = SQL_FieldNameToNum(query,      "admin");
   new col_username   = SQL_FieldNameToNum(query,   "username");
   new col_steam_id   = SQL_FieldNameToNum(query,   "steam_id");
@@ -90,7 +74,7 @@ public MySQL_RecieveBans(failstate, Handle:query, error[], code, data[], datasiz
   new col_created    = SQL_FieldNameToNum(query,    "created");
 
   new length, created, id = data[0];
-  static admin[32], username[32], steam_id[32], ip_address[32], reason[40];
+  static admin[LENGTH_NAME], username[LENGTH_NAME], steam_id[LENGTH_ID], ip_address[LENGTH_IP], reason[40];
 
   length  = SQL_ReadResult(query, col_length) * 60;
   created = SQL_ReadResult(query, col_created);
