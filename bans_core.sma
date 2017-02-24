@@ -122,17 +122,12 @@ public MySQL_LoadAdmins() {
   new query[192];
 
   admins_flush();
-  formatex(query, charsmax(query), "SELECT `aa`.* FROM `%s` as aa WHERE `aa`.`deleted_at` IS NULL AND (`aa`.`expires_at` > UNIX_TIMESTAMP(NOW())) AND `aa`.`server_id` = %d", DB_ADMIN, g_iServerId);
+  load_admins_query(query, charsmax(query), g_iServerId);
   SQL_ThreadQuery(g_pSqlTuple, "MySQL_RecieveAdmins", query);
 }
 
 public MySQL_RecieveAdmins(failstate, Handle:query, error[], code, data[], datasize) {
-  if(failstate == TQUERY_CONNECT_FAILED) {
-    log_amx("%s Could not connect to SQL database. [%d] %s", DEFAULT_TAG, code, error);
-  }
-  else if(failstate == TQUERY_QUERY_FAILED) {
-    log_amx("%s Load query failed. [%d] %s", DEFAULT_TAG, code, error);
-  }
+  if(failstate) return mysql_errors_print(failstate, code, error);
 
   new count = 0;
   if(SQL_NumRows(query)) {

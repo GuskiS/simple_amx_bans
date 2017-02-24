@@ -46,7 +46,7 @@ public MySQL_LoadBans(id) {
   get_user_ip(id, ip, charsmax(ip), 1);
 
   static data[1], query[512];
-  formatex(query, charsmax(query), "SELECT `ab`.*, UNIX_TIMESTAMP(`ab`.`created_at`) AS created, `aa`.`username` AS admin FROM `%s` AS ab INNER JOIN `%s` AS aa ON `aa`.`id` = `ab`.`admin_id` WHERE (`ab`.`deleted_at` IS NULL AND (`ab`.`ip_address` = '%s' OR `ab`.`steam_id` = '%s'))", DB_BAN, DB_ADMIN, ip, steam);
+  load_bans_query(query, charsmax(query), ip, steam);
 
   data[0] = id;
   SQL_ThreadQuery(g_pSqlTuple, "MySQL_RecieveBans", query, data, sizeof(query));
@@ -54,12 +54,7 @@ public MySQL_LoadBans(id) {
 }
 
 public MySQL_RecieveBans(failstate, Handle:query, error[], code, data[], datasize) {
-  if(failstate == TQUERY_CONNECT_FAILED) {
-    log_amx("%s Could not connect to SQL database. [%d] %s", DEFAULT_TAG, code, error);
-  }
-  else if(failstate == TQUERY_QUERY_FAILED) {
-    log_amx("%s Load query failed. [%d] %s", DEFAULT_TAG, code, error);
-  }
+  if(failstate) return mysql_errors_print(failstate, code, error);
 
   if(!SQL_NumResults(query)) {
     return PLUGIN_HANDLED;
@@ -118,8 +113,5 @@ public MySQL_RecieveBans(failstate, Handle:query, error[], code, data[], datasiz
 }
 
 public kick_player(id) {
-  static message[128];
-  format(message, charsmax(message), "%L", id, "KICK_MESSAGE");
-  server_cmd("kick #%d %s", get_user_userid(id), message);
-  return PLUGIN_CONTINUE;
+  _kick_player(id);
 }

@@ -4,14 +4,17 @@
 #include <bans>
 
 new Handle:g_pSqlTuple;
-new g_iServerId;
+new g_iServerId, g_iScreenCount;
+new Float:g_fScreenInterval;
 new g_dBanInfo[33][ENUM_BAN_INFO];
+new g_pScreenCount;
 
 public plugin_init() {
   register_plugin("[BANS] - Player Commands", BANS_VERSION, BANS_AUTHOR);
 
-  register_concmd("amx_banip", "cmdBan", ADMIN_BAN, "<time in mins> <steamID or nickname or #authid or IP> <reason>");
-  register_srvcmd("amx_banip", "cmdBan", -1, "<time in mins> <steamID or nickname or #authid or IP> <reason>");
+  g_pScreenCount = register_cvar("bans_screen_count", "5");
+  register_concmd("amx_banip", "cmd_ban", ADMIN_BAN, "<time in mins> <steamID or nickname or #authid or IP> <reason>");
+  register_srvcmd("amx_banip", "cmd_ban", -1, "<time in mins> <steamID or nickname or #authid or IP> <reason>");
 }
 
 public plugin_end() {
@@ -29,24 +32,18 @@ public plugin_cfg_post() {
   if(!g_iServerId) {
     set_fail_state("%s Unset 'bans_server_id' cvar, exiting...", DEFAULT_TAG);
   }
+
+  g_fScreenInterval = get_cvar_float("amx_ssinterval");
+  if(g_fScreenInterval) g_iScreenCount = get_pcvar_num(g_pScreenCount);
+
   MySQL_Init();
 }
 
-// public client_authorized(id) {
-//   MySQL_LoadBans(id);
-// }
-
-// MySQL
-public MySQL_Init() {
-  new host[64], user[32], pass[32], db[32];
-  get_cvar_string("amx_sql_host", host, charsmax(host));
-  get_cvar_string("amx_sql_user", user, charsmax(user));
-  get_cvar_string("amx_sql_pass", pass, charsmax(pass));
-  get_cvar_string("amx_sql_db", db, charsmax(db));
-  g_pSqlTuple = SQL_MakeDbTuple(host, user, pass, db);
+public client_authorized(id) {
+  g_dBanInfo[id][BAN_INFO_INBAN] = false;
 }
 
-public cmdBan(id, level, cid) {
+public cmd_ban(id, level, cid) {
   if(!cmd_access(id, level, cid, 3))
     return PLUGIN_HANDLED;
 
@@ -71,47 +68,61 @@ public cmdBan(id, level, cid) {
     return PLUGIN_HANDLED;
 
   g_dBanInfo[target][BAN_INFO_LENGTH] = str_to_num(length);
-  // TODO cleanup
   g_dBanInfo[target][BAN_INFO_INBAN] = true;
   g_dBanInfo[target][BAN_INFO_REASON] = reason;
 
-  new query[192], name[LENGTH_NAME_SAFE];
-  mysql_get_username_safe(id, name, charsmax(name));
-  // TODO correct admin query
-  formatex(query, charsmax(query), "SELECT `aa`.* FROM `%s` as aa WHERE `aa`.`deleted_at` IS NULL AND `aa`.`username` = '%s' AND `aa`.`server_id` = %d", DB_ADMIN, name, g_iServerId);
+  new query[192];
+  if(id) {
+    new name[LENGTH_NAME_SAFE];
+    mysql_get_username_safe(id, name, charsmax(name));
+    load_admin_query(query, charsmax(query), name, g_iServerId);
+  }
+  else {
+    // TODO load server admin
+  }
 
   new data[2];
   data[0] = id;
   data[1] = target;
-  SQL_ThreadQuery(g_pSqlTuple, "cmd_ban_", query, data, sizeof(data));
+  SQL_ThreadQuery(g_pSqlTuple, "MySQL_RecieveAdmin", query, data, sizeof(data));
 
   return PLUGIN_HANDLED;
 }
 
-public cmd_ban_(failstate, Handle:query, error[], code, data[], datasize) {
-  if(failstate == TQUERY_CONNECT_FAILED) {
-    log_amx("%s Could not connect to SQL database. [%d] %s", DEFAULT_TAG, code, error);
-  }
-  else if(failstate == TQUERY_QUERY_FAILED) {
-    log_amx("%s Load query failed. [%d] %s", DEFAULT_TAG, code, error);
+// MySQL
+public MySQL_Init() {
+  new host[64], user[32], pass[32], db[32];
+  get_cvar_string("amx_sql_host", host, charsmax(host));
+  get_cvar_string("amx_sql_user", user, charsmax(user));
+  get_cvar_string("amx_sql_pass", pass, charsmax(pass));
+  get_cvar_string("amx_sql_db", db, charsmax(db));
+  g_pSqlTuple = SQL_MakeDbTuple(host, user, pass, db);
+}
+
+public MySQL_RecieveAdmin(failstate, Handle:query, error[], code, data[], datasize) {
+  if(failstate) return mysql_errors_print(failstate, code, error);
+
+  new admin = data[0], id = data[1];
+  if(!is_user_connected(id)) {
+    console_print(admin, "%L", admin, "CL_NOT_FOUND");
+    return PLUGIN_HANDLED;
   }
 
-  new id = data[0];
-  new target = data[1];
-
-  if(!is_user_connected(target) || !SQL_NumResults(query)) {
+  if(!SQL_NumResults(query)) {
+    if(admin) remove_user_flags(admin);
+    console_print(admin, "%L", admin, "NO_ACC_COM");
     return PLUGIN_HANDLED;
   }
 
   static username[LENGTH_NAME_SAFE];
-  mysql_get_username_safe(target, username, charsmax(username));
+  mysql_get_username_safe(id, username, charsmax(username));
 
   new col_id = SQL_FieldNameToNum(query, "id");
   new admin_id = SQL_ReadResult(query, col_id);
 
   static steam_id[LENGTH_ID], ip[LENGTH_IP];
-  get_user_ip(target, ip, charsmax(ip), 1);
-  get_user_authid(target, steam_id, charsmax(steam_id));
+  get_user_ip(id, ip, charsmax(ip), 1);
+  get_user_authid(id, steam_id, charsmax(steam_id));
   if(contain(steam_id, "VALVE") != -1) {
     steam_id[0] = EOS;
   }
@@ -120,71 +131,34 @@ public cmd_ban_(failstate, Handle:query, error[], code, data[], datasize) {
   }
 
   new query[512];
-  formatex(query, charsmax(query), "INSERT INTO `%s` (`admin_id`, `server_id`, `username`, `ip_address`, `steam_id`, `reason`, `length`, `created_at`, `updated_at`) \
-    VALUES (%d, %d, '%s', '%s', '%s', '%s', %d, NOW(), NOW())", DB_BAN, admin_id, g_iServerId, username, ip, steam_id, g_dBanInfo[target][BAN_INFO_REASON], g_dBanInfo[target][BAN_INFO_LENGTH]);
+  insert_ban_query(query, charsmax(query), admin_id, g_iServerId, username, ip, steam_id, g_dBanInfo[id][BAN_INFO_REASON], g_dBanInfo[id][BAN_INFO_LENGTH]);
 
   new data[1];
   data[0] = id;
-  SQL_ThreadQuery(g_pSqlTuple, "insert_bandetails", query, data, sizeof(data));
+  SQL_ThreadQuery(g_pSqlTuple, "MySQL_AddBan", query, data, sizeof(data));
   return PLUGIN_HANDLED;
 }
 
-public insert_bandetails(failstate, Handle:query, error[], code, data[], datasize) {
-  if(failstate == TQUERY_CONNECT_FAILED) {
-    log_amx("%s Could not connect to SQL database. [%d] %s", DEFAULT_TAG, code, error);
-  }
-  else if(failstate == TQUERY_QUERY_FAILED) {
-    log_amx("%s Load query failed. [%d] %s", DEFAULT_TAG, code, error);
+public MySQL_AddBan(failstate, Handle:query, error[], code, data[], datasize) {
+  if(failstate) return mysql_errors_print(failstate, code, error);
+
+  new id = data[0];
+  new Float:timer = 2.0;
+  if(g_iScreenCount) {
+    timer += (g_fScreenInterval * float(g_iScreenCount));
+    client_cmd(id, "^"wait^";^"wait^";^"wait^";^"wait^";^"net_graph^" 3");
+    server_cmd("amx_screen #%d %d", get_user_userid(id), g_iScreenCount);
   }
 
-  kick_player(data[0]);
-  // new id = data[0];
-  // TODO add motd before kick
-  // select_amxbans_motd(id,g_choicePlayerId[id],bid)
+  set_task(timer, "kick_player", id);
   return PLUGIN_HANDLED;
-}
-
-public locate_player(id, identifier[]) {
-  new player = find_player("c", identifier); // Check based on steam ID
-  if(!player) player = find_player("bl", identifier); // Check based on a partial non-case sensitive name
-  if(!player) player = find_player("d", identifier);  // Check based on IP address
-
-  if(!player && identifier[0] == '#' && identifier[1]) {
-    player = find_player("k", str_to_num(identifier[1])); // Check based on user ID
-  }
-
-  if(player) {
-    new name[32], message[64];
-    get_user_name(player, name, charsmax(name));
-
-    if(get_user_flags(player) & ADMIN_IMMUNITY) {
-      formatex(message, charsmax(message), "%s Client ^"%s^" has immunity", DEFAULT_TAG, name);
-    }
-    else if(is_user_bot(player)) {
-      formatex(message, charsmax(message), "%s Client ^"%s^" is a bot", DEFAULT_TAG, name);
-    }
-
-    if(strlen(message)) {
-      id ? console_print(id, message) : server_print(message);
-      return 0;
-    }
-  }
-  else {
-    if(id) {
-      server_print("%s %L", DEFAULT_TAG, LANG_PLAYER, "PLAYER_NOT_FOUND", identifier);
-    }
-    else {
-      console_print(id, "%s %L", DEFAULT_TAG, LANG_PLAYER, "PLAYER_NOT_FOUND", identifier);
-    }
-    return 0;
-  }
-
-  return player;
 }
 
 public kick_player(id) {
-  static message[128];
-  format(message, charsmax(message), "%L", id, "KICK_MESSAGE");
-  server_cmd("kick #%d %s", get_user_userid(id), message);
-  return PLUGIN_CONTINUE;
+  _kick_player(id);
+}
+
+stock print_message(id, message[]) {
+  id ? console_print(id, message) : server_print(message);
+  return 0;
 }
