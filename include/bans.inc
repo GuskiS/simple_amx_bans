@@ -138,6 +138,7 @@ stock insert_ban_query(output[], len, admin_id, server_id, username[], ip[], ste
 //   access: string,
 //   flags: string,
 //   active: boolean,
+//   main: boolean,
 //   deleted_at: datetime,
 //   created_at: datetime,
 //   updated_at: datetime
