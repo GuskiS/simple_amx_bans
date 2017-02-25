@@ -15,6 +15,7 @@ public plugin_init() {
   g_pScreenCount = register_cvar("bans_screen_count", "5");
   register_concmd("amx_banip", "cmd_ban", ADMIN_BAN, "<time in mins> <steamID or nickname or #authid or IP> <reason>");
   register_srvcmd("amx_banip", "cmd_ban", -1, "<time in mins> <steamID or nickname or #authid or IP> <reason>");
+  register_srvcmd("amx_userid", "cmd_userid", -1, "<steamID or nickname or IP>");
 }
 
 public plugin_end() {
@@ -85,6 +86,27 @@ public cmd_ban(id, level, cid) {
   data[0] = id;
   data[1] = target;
   SQL_ThreadQuery(g_pSqlTuple, "MySQL_RecieveAdmin", query, data, sizeof(data));
+
+  return PLUGIN_HANDLED;
+}
+
+public cmd_userid(id, level, cid) {
+  if(!cmd_access(id, level, cid, 1))
+    return PLUGIN_HANDLED;
+
+  if(read_argc() < 2) {
+    client_print(id, print_console, "%s %L", DEFAULT_TAG, LANG_PLAYER, "AMX_BAN_SYNTAX");
+    return PLUGIN_HANDLED;
+  }
+
+  static identifier[96];
+  read_args(identifier, charsmax(identifier));
+  trim(identifier);
+
+  new target = locate_player(id, identifier);
+  if(target) {
+    server_print("#%d", get_user_userid(target));
+  }
 
   return PLUGIN_HANDLED;
 }
